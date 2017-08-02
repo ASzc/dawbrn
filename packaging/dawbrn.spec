@@ -9,8 +9,7 @@ Source0: https://github.com/ASzc/dawbrn/archive/dawbrn-%{version}.tar.gz
 Requires: rh-git29, rh-python35
 BuildRequires: rh-python35
 
-# Turn off brp-python-bytecompile
-%global __os_install_post %(echo '%{__os_install_post}' | sed -e 's!/usr/lib[^[:space:]]*/brp-python-bytecompile!!g')
+%global __python scl enable rh-python35 -- python
 
 %description
 Daemon for automatic documentation build and deployment
@@ -23,9 +22,6 @@ Daemon for automatic documentation build and deployment
 %install
 mkdir -p %{buildroot}%{_usr}/lib/dawbrn/
 cp -r dawbrn %{buildroot}%{_usr}/lib/dawbrn/
-# Manually generate bytecode, in place of disabled brp-python-bytecompile
-scl enable rh-python35 -- python -m compileall %{buildroot}%{_usr}/lib/dawbrn/dawbrn
-
 cd packaging/install
 install -Dm644 usr/lib/systemd/system/dawbrn.service %{buildroot}%{_usr}/lib/systemd/system/dawbrn.service
 install -Dm440 etc/sudoers.d/10-dawbrn %{buildroot}%{_sysconfdir}/sudoers.d/10-dawbrn
