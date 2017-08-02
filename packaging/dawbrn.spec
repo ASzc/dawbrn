@@ -48,7 +48,7 @@ getent passwd dawbrn > /dev/null || /usr/sbin/useradd -r -g dawbrn \
 %{_usr}/lib/systemd/system/dawbrn.service
 %{_sysconfdir}/sudoers.d/10-dawbrn
 %config(noreplace) %{_sysconfdir}/sysconfig/dawbrn
-%{_bindir}/dawbrn_dockerbuiild
+%{_bindir}/dawbrn_dockerbuild
 %dir %attr(-,dawbrn,dawbrn) %{_localstatedir}/lib/dawbrn
 
 %changelog
