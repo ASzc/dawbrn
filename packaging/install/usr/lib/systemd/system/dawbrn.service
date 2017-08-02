@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=nobody
+User=dawbrn
 WorkingDirectory=/usr/lib/dawbrn
 EnvironmentFile=/etc/sysconfig/dawbrn
 ExecStart=/usr/bin/scl enable rh-git29 rh-python35 -- python -m dawbrn
