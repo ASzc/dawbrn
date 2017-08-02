@@ -1,0 +1,26 @@
+#!/bin/bash
+
+set -eEu
+
+die() {
+    echo "$@" >&2
+    exit 1
+}
+
+source_clone="$(readlink -e "${1:?Specify a directory within /tmp/dawbrn/ to mount in the container}")"
+[[ "$source_clone" =~ ^/tmp/dawbrn/ ]] || die "Given directory '$source_clone' is not within /tmp/dawbrn/"
+
+makedir -p -m 700 /tmp/dawbrn_m2repo
+chown nobody: /tmp/dawbrn_m2repo
+
+docker run \
+    --rm \
+    --user nobody \
+    -v "$source_clone:/tmp/build:z" \
+    -v /tmp/dawbrn_m2repo:/tmp/m2repo:Z \
+    --workdir /tmp/build \
+    centos:7 \
+    mvn clean prepare-package \
+    -Dmaven.repo.local=/tmp/m2repo \
+    -B \
+    -l mvn.log

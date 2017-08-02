@@ -1,0 +1,17 @@
+# Signing/verification token for incoming webhook calls
+# https://developer.github.com/webhooks/securing/#setting-your-secret-token
+# Suggested generation command:
+# python -c 'import os, base64; print(base64.urlsafe_b64encode(os.urandom(402)).decode("ascii"))'
+GITHUB_HMAC_TOKEN=
+
+# Access token for deployment
+# https://github.com/settings/tokens
+# Needs public_repo scope
+GITHUB_TOKEN=
+
+# Main/Official gh-pages deployment repo
+# ex: project/deploy-docs
+GITHUB_PAGES_STUB=
+# Seperate gh-pages deployment repo for pull requests
+# ex: project/deploy-docs-pullrequest
+GITHUB_PAGES_PR_STUB=

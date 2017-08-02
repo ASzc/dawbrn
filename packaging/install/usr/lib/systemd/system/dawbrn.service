@@ -1,0 +1,14 @@
+[Unit]
+Description=Dawbrn Service
+After=network.target
+
+[Service]
+Type=simple
+User=nobody
+WorkingDirectory=/usr/lib/dawbrn
+EnvironmentFile=/etc/sysconfig/dawbrn
+ExecStart=/usr/bin/scl enable rh-git29 rh-python35 -- python -m dawbrn
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target
