@@ -1,1 +1,1 @@
-nobody  ALL=(ALL)  NOPASSWD: /usr/bin/dawbrn_dockerbuild
+dawbrn  ALL=(ALL)  NOPASSWD: /usr/bin/dawbrn_dockerbuild
