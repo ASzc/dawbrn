@@ -23,8 +23,8 @@ Daemon for automatic documentation build and deployment
 %install
 mkdir -p %{buildroot}%{_usr}/lib/dawbrn/
 cp -r dawbrn %{buildroot}%{_usr}/lib/dawbrn/
-# Manually invoke brp-python-bytecompile
-scl enable rh-python35 -- %{py_byte_compile} python %{buildroot}%{_usr}/lib/dawbrn/dawbrn
+# Manually generate bytecode, in place of disabled brp-python-bytecompile
+scl enable rh-python35 -- python -m compileall %{buildroot}%{_usr}/lib/dawbrn/dawbrn
 
 cd packaging/install
 install -Dm644 usr/lib/systemd/system/dawbrn.service %{buildroot}%{_usr}/lib/systemd/system/dawbrn.service
