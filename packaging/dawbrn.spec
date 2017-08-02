@@ -27,6 +27,7 @@ install -Dm644 usr/lib/systemd/system/dawbrn.service %{buildroot}%{_usr}/lib/sys
 install -Dm440 etc/sudoers.d/10-dawbrn %{buildroot}%{_sysconfdir}/sudoers.d/10-dawbrn
 install -Dm600 etc/sysconfig/dawbrn %{buildroot}%{_sysconfdir}/sysconfig/dawbrn
 install -Dm755 usr/bin/dawbrn_dockerbuild %{buildroot}%{_bindir}/dawbrn_dockerbuild
+install -dm700 %{buildroot}%{_localstatedir}/lib/dawbrn
 
 %clean
 rm -rf $RPM_BUILD_ROOT
