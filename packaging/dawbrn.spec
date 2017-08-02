@@ -1,5 +1,5 @@
 Name: dawbrn
-Version: 0.1.0
+Version: 1.0.0
 Release: 1%{?dist}
 Summary: Documentation Autobuilds Would Be Really Nice
 License: ASL 2.0
