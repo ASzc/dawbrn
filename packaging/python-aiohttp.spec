@@ -11,13 +11,6 @@ License:        ASL 2.0
 URL:            https://github.com/aio-libs/aiohttp/
 Source0:        https://github.com/aio-libs/aiohttp/archive/v%{version}.tar.gz#/%{srcname}-%{version}.tar.gz
 
-BuildRequires:  gcc
-
-%description
-Python HTTP client/server for asyncio which supports both the client and the
-server side of the HTTP protocol, client and server websocket, and webservers
-with middlewares and pluggable routing.
-
 Requires:       rh-python35-chardet
 Requires:       rh-python35-multidict >= 2.1.4
 Requires:       rh-python35-async-timeout >= 1.2.0
@@ -25,13 +18,27 @@ Requires:       rh-python35-yarl
 
 Requires: rh-python35
 BuildRequires: rh-python35
+
 %global __python scl enable rh-python35 -- python
 %global __python3 scl enable rh-python35 -- python
 
+%description
+Python HTTP client/server for asyncio which supports both the client and the
+server side of the HTTP protocol, client and server websocket, and webservers
+with middlewares and pluggable routing.
+
 %prep
-%autosetup -n %{srcname}-%{version}
+%setup -q -n "%(echo "$(tar -tf %{SOURCE0} | head -1 | tr -d '/')")"
 
 %build
+echo ------------------
+echo ------------------
+ls -lha /builddir/build/SOURCES/
+tar -tvvf %{SOURCE0}
+ls -laR
+find -iname '*setup*'
+echo ------------------
+echo ------------------
 CFLAGS="%{optflags}" %{__python3} setup.py build
 sleep 1
 

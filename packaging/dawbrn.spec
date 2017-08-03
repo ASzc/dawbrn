@@ -28,7 +28,7 @@ install -Dm440 etc/sudoers.d/10-dawbrn %{buildroot}%{_sysconfdir}/sudoers.d/10-d
 install -Dm600 etc/sysconfig/dawbrn %{buildroot}%{_sysconfdir}/sysconfig/dawbrn
 install -Dm755 usr/bin/dawbrn_dockerbuild %{buildroot}%{_bindir}/dawbrn_dockerbuild
 install -dm700 %{buildroot}%{_localstatedir}/lib/dawbrn
-install -m664 var/lib/dawbrn/.gitconfig %{buildroot}%{_localstatedir}/lib/dawbrn/.gitconfig
+install -Dm664 var/lib/dawbrn/gitconfig %{buildroot}%{_localstatedir}/lib/dawbrn/.gitconfig
 # cache
 install -Dm644 etc/nginx/conf.d/10-dawbrn-cache.conf %{buildroot}%{_sysconfdir}/nginx/conf.d/10-dawbrn-cache.conf
 install -dm700 %{buildroot}%{_localstatedir}/lib/nginx/dawbrn_cache
@@ -55,7 +55,7 @@ getent passwd dawbrn > /dev/null || /usr/sbin/useradd -r -g dawbrn \
 %{_bindir}/dawbrn_dockerbuild
 %defattr(-,dawbrn,dawbrn)
 %dir %{_localstatedir}/lib/dawbrn
-%{_localstatedir}/lib/dawbrn/*
+%{_localstatedir}/lib/dawbrn/.gitconfig
 
 %changelog
 * Wed Aug 02 2017 Alex Szczuczko <aszczucz@redhat.com> - 1.0.0-1
@@ -74,7 +74,7 @@ Configuration file for nginx to cache for dawbrn
 
 %files cache
 %defattr(-,root,root)
-%{_sysconfdir}/nginx/config.d/10-dawbrn-cache.conf
+%{_sysconfdir}/nginx/conf.d/10-dawbrn-cache.conf
 %dir %{_sysconfdir}/dawbrn/maven-cache.d
 %dir %attr(-,nginx,nginx) %{_localstatedir}/lib/nginx/dawbrn_cache
 
