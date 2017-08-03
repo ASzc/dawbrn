@@ -1,0 +1,6 @@
+    <mirror>
+      <id>dawbrn-mavencentral</id>
+      <name>Dawbrn Maven Central Cache</name>
+      <url>http://172.17.0.1/dawbrn/mavencentral</url>
+      <mirrorOf>central</mirrorOf>
+    </mirror>
