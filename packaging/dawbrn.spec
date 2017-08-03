@@ -6,7 +6,7 @@ License: ASL 2.0
 BuildArch: noarch
 Url: https://github.com/ASzc/dawbrn
 Source0: https://github.com/ASzc/dawbrn/archive/dawbrn-%{version}.tar.gz
-Requires: rh-git29, rh-python35, docker
+Requires: rh-git29, rh-python35, rh-python35-aiohttp, docker
 BuildRequires: rh-python35
 
 %global __python scl enable rh-python35 -- python
