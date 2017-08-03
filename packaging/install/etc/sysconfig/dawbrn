@@ -6,7 +6,7 @@ GITHUB_HMAC_TOKEN=
 
 # Access token for deployment
 # https://github.com/settings/tokens
-# Needs public_repo scope
+# Needs scopes: public_repo repo:status
 GITHUB_TOKEN=
 
 # Main/Official gh-pages deployment repo

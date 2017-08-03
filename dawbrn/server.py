@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -9,6 +10,7 @@ import traceback
 import aiohttp
 import aiohttp.web
 
+from . import build
 from . import exception
 
 logger = logging.getLogger(__name__)
@@ -96,6 +98,54 @@ def _github_deploy_url(stub):
         stub,
     )
 
+def _github_pages_url(stub, deploy_dir):
+    username, reponame = stub.split("/", 1)
+    return "https://{username}.github.io/{reponame}/{deploy_dir}".format(**locals())
+
+class GithubStatus(object):
+    def __init__(self, repo, sha, success_url, context="documentation"):
+        self.repo = repo
+        self.sha = sha
+        self.success_url = success_url
+        self.context = context
+        self.github = "https://api.github.com"
+        self.session = None
+
+    async def send_status(self, state, description, target_url=None):
+        logger.debug("Sending commit state {state} for commit {self.sha}".format(**locals()))
+        async with self.session.post(
+            "{self.github}/repos/{self.repo}/statuses/{self.sha}".format(**locals()),
+            json={
+                "state": state,
+                "target_url": target_url,
+                "description": description,
+                "context": self.context,
+            },
+            headers={
+                "Authorization": "token {}".format(os.environ["GITHUB_TOKEN"]),
+            },
+        ) as response:
+            async with response:
+                if response.status // 100 == 2:
+                    logger.info("Set commit state {state}, HTTP {response.status}".format(**locals()))
+                else:
+                    logger.error("Unable to set commit state {state}, HTTP {response.status}".format(**locals()))
+
+    async def __aenter__(self):
+        self.session = aiohttp.ClientSession()
+        await self.session.__aenter__()
+        await self.send_status("pending", "Bawbrn: build in progress")
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, exc_traceback):
+        await self.session.__aexit__(exc_type, exc_value, exc_traceback)
+        if exc_type is None:
+            self.send_status("success", "Dawbrn: build completed ok", target_url=self.success_url)
+        elif isinstance(exc_type, exception.SubprocessError):
+            self.send_status("failure", "Dawbrn: {exc_value.desc}".format(**locals()))
+        else:
+            self.send_status("error", "Dawbrn: build error: {{exc_type.__name__}}".format(**locals()))
+
 async def github_webhook(data, request):
     # Verify signature
     hasher = hmac.new(os.environ["GITHUB_HMAC_TOKEN"], digestmod="sha1")
@@ -113,19 +163,25 @@ async def github_webhook(data, request):
         if data["ref"] == "refs/heads/master":
             trimmed_ref = data["ref"][11:]
             logger.info("Building branch {trimmed_ref} from repo {data[repository][full_name]}".format(**locals()))
-            await build_deploy(
-                source_url=data["repository"]["html_url"],
-                source_ref=data["ref"],
-                deploy_dir="dev/{trimmed_ref}".format(**locals()),
-                deploy_url=_github_deploy_url(os.environ["GITHUB_PAGES_STUB"]),
-            )
+            deploy_dir = "dev/{trimmed_ref}".format(**locals())
+            async with GithubStatus(
+                repo=data["repository"]["full_name"],
+                sha=data["after"],
+                success_url=_github_pages_url(os.environ["GITHUB_PAGES_STUB"], deploy_dir),
+            ):
+                await build.build_deploy(
+                    source_url=data["repository"]["html_url"],
+                    source_ref=data["ref"],
+                    deploy_dir=deploy_dir,
+                    deploy_url=_github_deploy_url(os.environ["GITHUB_PAGES_STUB"]),
+                )
         else:
-            logger.debug("Ignoring branch {data[ref]}".format(**locals()))
+            logger.debug("Ignoring branch: {data[ref]}".format(**locals()))
 
     elif request.headers["X-GitHub-Event"] == "create":
         if data["ref_type"] == "tag":
             logger.info("Building tag {data[ref]} from repo {data[repository][full_name]}".format(**locals()))
-            await build_deploy(
+            await build.build_deploy(
                 source_url=data["repository"]["html_url"],
                 source_ref=data["ref"],
                 deploy_dir=data["ref"],
@@ -135,13 +191,28 @@ async def github_webhook(data, request):
             logger.debug("Ignoring ref_type: {data[ref_type]}".format(**locals()))
 
     elif request.headers["X-GitHub-Event"] == "pull_request":
-        pass
-        await build_deploy(
-            TODOcommit,
-            deploy_dir="PR/TODOprnumber",
-            deploy_url=_github_deploy_url(os.environ["GITHUB_PAGES_PR_STUB"]),
-            cleanup=True,
-        )
+        if data["action"] in ["opened", "synchronize"]:
+            logger.info("PR #{data[number]} new/updated, building branch {data[pull_request][head][ref]} from repo {data[pull_request][head][repo][full_name]}".format(**locals()))
+            deploy_dir = "PR/{data[number]}".format(**locals())
+            async with GithubStatus(
+                repo=data["repository"]["full_name"],
+                sha=data["pull_request"]["head"]["sha"],
+                success_url=_github_pages_url(os.environ["GITHUB_PAGES_PR_STUB"], deploy_dir),
+            ):
+                await build.build_deploy(
+                    source_url=data["pull_request"]["head"]["repo"]["html_url"],
+                    source_ref=data["pull_request"]["head"]["ref"],
+                    deploy_dir=deploy_dir,
+                    deploy_url=_github_deploy_url(os.environ["GITHUB_PAGES_PR_STUB"]),
+                )
+        elif data["action"] == "closed":
+            logger.info("PR #{data[number]} closed, removing".format(**locals()))
+            await build.build_undeploy(
+                deploy_dir="PR/{data[number]}".format(**locals()),
+                deploy_url=_github_deploy_url(os.environ["GITHUB_PAGES_PR_STUB"]),
+            )
+        else:
+            logger.debug("Ignoring action: {data[action]}".format(**locals()))
     else:
         raise Exception("Unknown event type")
 
@@ -176,4 +247,8 @@ def start_server(bind, mount_root):
     )
 
     logger.debug("Handing over thread to run_app")
-    aiohttp.web.run_app(app)
+    aiohttp.web.run_app(
+        app,
+        host=bind[0],
+        port=bind[1],
+    )

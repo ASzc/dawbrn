@@ -7,19 +7,28 @@ die() {
     exit 1
 }
 
+# Since this script runs as root, must ensure volume mount isn't any arbitrary path
 source_clone="$(readlink -e "${1:?Specify a directory within /tmp/dawbrn/ to mount in the container}")"
 [[ "$source_clone" =~ ^/tmp/dawbrn/ ]] || die "Given directory '$source_clone' is not within /tmp/dawbrn/"
 
+# Prepare a global maven settings file for use in the container
 td="$(mktemp -d)"
 trap "rm -rf '$td'" EXIT
 {
     echo "<settings>"
     echo "  <mirrors>"
-    find /etc/dawbrn/maven-cache.d/ -type f -name '*.xml' | xargs -0 --no-run-if-empty cat
+    if [ -d /etc/dawbrn/maven-cache.d/ ]
+    then
+        find /etc/dawbrn/maven-cache.d/ -type f -name '*.xml' -print0 | xargs -0 --no-run-if-empty cat
+    fi
     echo "  </mirrors>"
     echo "</settings>"
 } > "$td/settings.xml"
 chown -R nobody: "$td"
+
+# Prepare a build log for use after the container finishes
+> "$source_clone/dawbrn.log"
+chown dawbrn: "$source_clone/dawbrn.log"
 
 docker run \
     --rm \
@@ -28,7 +37,7 @@ docker run \
     -v "$td:/tmp/m2:z" \
     --workdir /tmp/build \
     centos:7 \
-    mvn clean prepare-package \
+    mvn install \
     -gs /tmp/m2/settings.xml \
     -B \
-    -l mvn.log
+    >> "$source_clone/dawbrn.log" 2>&1
