@@ -96,7 +96,7 @@ async def build_deploy(source_url, source_ref, deploy_dir, deploy_url):
             # Not using shutil to avoid blocking the aio thread
             await _subprocess(
                 "cp", "-r",
-                os.path.join(source_clone, "deploy", "."), # TODO configurable???
+                os.path.join(source_clone, "target", "."), # TODO configurable???
                 os.path.join(source_clone, "dawbrn.log"),
                 os.path.join(deploy_clone, deploy_dir)
             )
