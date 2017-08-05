@@ -11,33 +11,19 @@ die() {
 source_clone="$(readlink -e "${1:?Specify a directory within /tmp/dawbrn/ to mount in the container}")"
 [[ "$source_clone" =~ ^/tmp/dawbrn/ ]] || die "Given directory '$source_clone' is not within /tmp/dawbrn/"
 
-# Prepare a global maven settings file for use in the container
-td="$(mktemp -d)"
-trap "rm -rf '$td'" EXIT
-{
-    echo "<settings>"
-    echo "  <mirrors>"
-    if [ -d /etc/dawbrn/maven-cache.d/ ]
-    then
-        find /etc/dawbrn/maven-cache.d/ -type f -name '*.xml' -print0 | xargs -0 --no-run-if-empty cat
-    fi
-    echo "  </mirrors>"
-    echo "</settings>"
-} > "$td/settings.xml"
-chown -R nobody: "$td"
+# Give ownership of source_clone to container user, and restore ownership on exit
+chown -R 2000:2000 "$source_clone"
+trap "chown -R dawbrn: '$source_clone'" EXIT
 
-# Prepare a build log for use after the container finishes
+# Prepare a build log (that's never writable by the container user, since it's created after the chown)
 > "$source_clone/dawbrn.log"
-chown dawbrn: "$source_clone/dawbrn.log"
 
 docker run \
     --rm \
-    --user nobody \
     -v "$source_clone:/tmp/build:z" \
-    -v "$td:/tmp/m2:z" \
+    -v "/etc/dawbrn/maven-cache:/opt/apache-maven/conf/settings:Zro" \
     --workdir /tmp/build \
-    centos:7 \
+    aszczucz/maven-centos:jdk8_mvn3.3.9 \
     mvn install \
-    -gs /tmp/m2/settings.xml \
     -B \
     >> "$source_clone/dawbrn.log" 2>&1

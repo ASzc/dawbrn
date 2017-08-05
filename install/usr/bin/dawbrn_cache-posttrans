@@ -1,0 +1,11 @@
+#!/bin/bash
+
+set -eu
+
+{
+    echo "<settings>"
+    echo "  <mirrors>"
+    find /etc/dawbrn/maven-cache.d/ -type f -name '*.xml' -print0 | xargs -0 --no-run-if-empty cat
+    echo "  </mirrors>"
+    echo "</settings>"
+} > "/etc/dawbrn/maven-cache/settings.xml"
