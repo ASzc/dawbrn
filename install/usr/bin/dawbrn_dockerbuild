@@ -24,6 +24,4 @@ docker run \
     -v "/etc/dawbrn/maven-cache:/opt/apache-maven/conf/settings:Zro" \
     --workdir /tmp/build \
     aszczucz/maven-centos:jdk8_mvn3.3.9 \
-    mvn install \
-    -B \
     >> "$source_clone/dawbrn.log" 2>&1
