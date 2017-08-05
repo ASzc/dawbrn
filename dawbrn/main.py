@@ -79,8 +79,4 @@ def main():
     parser = create_argparser()
     args = parser.parse_args()
 
-    if "func" in args:
-        sys.exit(args.func(args))
-    else:
-        parser.print_help()
-        sys.exit(1)
+    sys.exit(run_subcommand(args))
