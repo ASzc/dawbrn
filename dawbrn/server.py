@@ -101,24 +101,28 @@ def _github_pages_url(stub, deploy_dir):
     username, reponame = stub.split("/", 1)
     return "https://{username}.github.io/{reponame}/{deploy_dir}".format(**locals())
 
-class GithubStatus(object):
-    def __init__(self, repo, sha, success_url, context="documentation"):
+class GithubCommentStatus(object):
+    def __init__(self, repo, pr_num, sha, success_url):
         self.repo = repo
+        self.pr_num = pr_num
         self.sha = sha
         self.success_url = success_url
-        self.context = context
         self.github = "https://api.github.com"
         self.session = None
 
-    async def send_status(self, state, description, target_url=None):
-        logger.debug("Sending commit state {state} for commit {self.sha}".format(**locals()))
+    async def add_comment(self, state, description, target_url=None):
+        logger.debug("Adding comment state {state} for PR {self.pr_num}, commit {self.sha}".format(**locals()))
+
+        if state == "success":
+            shortsha = self.sha[:8]
+            body = "[{description}]({self.success_url}) (commit {shortsha})".format(**locals())
+        else:
+            body = description
+
         async with self.session.post(
-            "{self.github}/repos/{self.repo}/statuses/{self.sha}".format(**locals()),
+            "{self.github}/repos/{self.repo}/issues/{self.pr_num}/comments".format(**locals()),
             json={
-                "state": state,
-                "target_url": target_url,
-                "description": description,
-                "context": self.context,
+                "body": body,
             },
             headers={
                 "Authorization": "token {}".format(os.environ["GITHUB_TOKEN"]),
@@ -126,23 +130,22 @@ class GithubStatus(object):
         ) as response:
             async with response:
                 if response.status // 100 == 2:
-                    logger.info("Set commit state {state}, HTTP {response.status}".format(**locals()))
+                    logger.info("Added comment state {state} for PR {self.pr_num}".format(**locals()))
                 else:
-                    logger.error("Unable to set commit state {state}, HTTP {response.status}".format(**locals()))
+                    logger.error("Unable to add comment state {state} for PR, HTTP {response.status}".format(**locals()))
 
     async def __aenter__(self):
         self.session = aiohttp.ClientSession()
         await self.session.__aenter__()
-        await self.send_status("pending", "Bawbrn: build in progress")
         return self
 
     async def __aexit__(self, exc_type, exc_value, exc_traceback):
         if exc_type is None:
-            await self.send_status("success", "Dawbrn: build completed ok", target_url=self.success_url)
+            await self.add_comment("success", "Build completed ok", target_url=self.success_url)
         elif isinstance(exc_type, exception.SubprocessError):
-            await self.send_status("failure", "Dawbrn: {exc_value.desc}".format(**locals()))
+            await self.add_comment("failure", "Build failure: {exc_value.desc}".format(**locals()))
         else:
-            await self.send_status("error", "Dawbrn: build error: {{exc_type.__name__}}".format(**locals()))
+            await self.add_comment("error", "Build error: {exc_type.__name__}".format(**locals()))
         await self.session.__aexit__(exc_type, exc_value, exc_traceback)
 
 async def github_webhook(data, request):
@@ -169,17 +172,12 @@ async def github_webhook_background(data, request):
             trimmed_ref = data["ref"][11:]
             logger.info("Building branch {trimmed_ref} from repo {data[repository][full_name]}".format(**locals()))
             deploy_dir = "dev/{trimmed_ref}".format(**locals())
-            async with GithubStatus(
-                repo=data["repository"]["full_name"],
-                sha=data["after"],
-                success_url=_github_pages_url(os.environ["GITHUB_PAGES_STUB"], deploy_dir),
-            ):
-                await build.build_deploy(
-                    source_url=data["repository"]["html_url"],
-                    source_ref=trimmed_ref,
-                    deploy_dir=deploy_dir,
-                    deploy_url=_github_deploy_url(os.environ["GITHUB_PAGES_STUB"]),
-                )
+            await build.build_deploy(
+                source_url=data["repository"]["html_url"],
+                source_ref=trimmed_ref,
+                deploy_dir=deploy_dir,
+                deploy_url=_github_deploy_url(os.environ["GITHUB_PAGES_STUB"]),
+            )
         else:
             logger.debug("Ignoring branch: {data[ref]}".format(**locals()))
 
@@ -199,8 +197,9 @@ async def github_webhook_background(data, request):
         if data["action"] in ["opened", "reopened", "synchronize"]:
             logger.info("PR #{data[number]} new/updated, building branch {data[pull_request][head][ref]} from repo {data[pull_request][head][repo][full_name]}".format(**locals()))
             deploy_dir = "PR/{data[number]}".format(**locals())
-            async with GithubStatus(
+            async with GithubCommentStatus(
                 repo=data["repository"]["full_name"],
+                pr_num=data["number"],
                 sha=data["pull_request"]["head"]["sha"],
                 success_url=_github_pages_url(os.environ["GITHUB_PAGES_PR_STUB"], deploy_dir),
             ):
