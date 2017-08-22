@@ -21,7 +21,7 @@ trap "chown -R dawbrn: '$source_clone'" EXIT
 docker run \
     --rm \
     -v "$source_clone:/tmp/build:z" \
-    -v "/etc/dawbrn/maven-cache:/opt/apache-maven/conf/settings:Zro" \
+    -v "/etc/dawbrn/maven-cache:/opt/apache-maven/conf/settings:Z" \
     --workdir /tmp/build \
     aszczucz/maven-centos:jdk8_mvn3.3.9 \
     >> "$source_clone/dawbrn.log" 2>&1

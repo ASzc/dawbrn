@@ -10,11 +10,11 @@ class ContextLogRecord(logging.LogRecord):
     no_context_found = "NoContext"
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        task = asyncio.Task.current_task()
-        if task is not None:
-            self.log_context = getattr(task, "log_context", self.no_context_found)
-        else:
-            self.log_context = self.no_context_found
+        self.log_context = self.no_context_found
+        if args[0] != "asyncio":
+            task = asyncio.Task.current_task()
+            if task is not None:
+                self.log_context = getattr(task, "log_context", self.no_context_found)
 
 #
 # Subcommands
@@ -29,7 +29,6 @@ def run_subcommand(args):
     # Go
     server.start_server(
         bind=(args.address, args.port),
-        mount_root=args.mount_root,
     )
 
 #

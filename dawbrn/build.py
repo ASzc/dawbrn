@@ -1,10 +1,13 @@
 import asyncio
 import asyncio.subprocess
+import logging
 import os
 import tempfile
 import time
 
 from . import exception
+
+logger = logging.getLogger(__name__)
 
 _deploy_tasks = dict()
 
@@ -46,6 +49,7 @@ async def _try_deploy(deploy_url, coro, commit_msg="Deploy"):
         retry_count = 0
         retry = True
         while retry:
+            logger.info("Attempt {retry_count} to deploy".format(**locals()))
             await _subprocess(
                 "git", "-C", deploy_clone, "fetch",
                 "--depth", "1",
@@ -55,7 +59,7 @@ async def _try_deploy(deploy_url, coro, commit_msg="Deploy"):
             )
 
             await _subprocess("git", "-C", deploy_clone, "reset", "--hard", "origin/gh-pages")
-            await _subprocess("git", "-C", deploy_clone, "checkout", "-b", time.time(), "origin/gh-pages")
+            await _subprocess("git", "-C", deploy_clone, "checkout", "-b", str(time.time()), "origin/gh-pages")
 
             await coro(deploy_clone)
             await _subprocess("git", "-C", deploy_clone, "add", "-A")
@@ -68,8 +72,13 @@ async def _try_deploy(deploy_url, coro, commit_msg="Deploy"):
             # There may have been an interleaved push, assume any failure is this scenario and retry
             success = p.returncode == 0
             retry = not success and retry_count < 5
-            await asyncio.sleep(2 * (2 ** retry_count - 1))
             retry_count += 1
+            if not success:
+                logger.info("Unable to push, retry == {retry}".format(**locals()))
+            if retry:
+                delay = 2 * (2 ** retry_count - 1)
+                logger.debug("Sleeping for {delay} seconds".format(**locals()))
+                await asyncio.sleep(delay)
         if not success:
             raise exception.DeployError("Giving up on deploy after {retry_count} attempts".format(**locals()))
 
@@ -93,14 +102,17 @@ async def build_deploy(source_url, source_ref, deploy_dir, deploy_url):
         )
 
         async def copy(deploy_clone):
+            output_dir = os.path.join(deploy_clone, deploy_dir)
             # Not using shutil to avoid blocking the aio thread
+            await _subprocess("rm", "-rf", output_dir)
+            os.makedirs(output_dir)
             await _subprocess(
                 "cp", "-r",
                 os.path.join(source_clone, "target", "."), # TODO configurable???
                 os.path.join(source_clone, "dawbrn.log"),
-                os.path.join(deploy_clone, deploy_dir)
+                output_dir
             )
-        _try_deploy(deploy_url, copy)
+        await _try_deploy(deploy_url, copy)
 
 async def build_undeploy(deploy_dir, deploy_url):
     await register(deploy_dir, deploy_url)
@@ -111,4 +123,4 @@ async def build_undeploy(deploy_dir, deploy_url):
             "rm", "-rf",
             os.path.join(deploy_clone, deploy_dir)
         )
-    _try_deploy(deploy_url, remove, commit_msg="Undeploy")
+    await _try_deploy(deploy_url, remove, commit_msg="Undeploy")

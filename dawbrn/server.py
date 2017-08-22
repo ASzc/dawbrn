@@ -79,7 +79,6 @@ def json_endpoint(coro):
         else:
             status = 200
             obj = ret
-            logger.info("Completed ok")
 
         response = aiohttp.web.Response(
             status=status,
@@ -138,17 +137,17 @@ class GithubStatus(object):
         return self
 
     async def __aexit__(self, exc_type, exc_value, exc_traceback):
-        await self.session.__aexit__(exc_type, exc_value, exc_traceback)
         if exc_type is None:
-            self.send_status("success", "Dawbrn: build completed ok", target_url=self.success_url)
+            await self.send_status("success", "Dawbrn: build completed ok", target_url=self.success_url)
         elif isinstance(exc_type, exception.SubprocessError):
-            self.send_status("failure", "Dawbrn: {exc_value.desc}".format(**locals()))
+            await self.send_status("failure", "Dawbrn: {exc_value.desc}".format(**locals()))
         else:
-            self.send_status("error", "Dawbrn: build error: {{exc_type.__name__}}".format(**locals()))
+            await self.send_status("error", "Dawbrn: build error: {{exc_type.__name__}}".format(**locals()))
+        await self.session.__aexit__(exc_type, exc_value, exc_traceback)
 
 async def github_webhook(data, request):
     # Verify signature
-    hasher = hmac.new(os.environ["GITHUB_HMAC_TOKEN"], digestmod="sha1")
+    hasher = hmac.new(os.environ["GITHUB_HMAC_TOKEN"].encode("utf-8"), digestmod="sha1")
     hasher.update(await request.read())
     expected = "sha1={}".format(hasher.hexdigest())
     if not hmac.compare_digest(expected, request.headers["X-Hub-Signature"]):
@@ -156,11 +155,17 @@ async def github_webhook(data, request):
 
     logger.info("Received {} event".format(request.headers["X-GitHub-Event"]))
 
+    bgtask = request.app.loop.create_task(github_webhook_background(data, request))
+    bgtask.log_context = asyncio.Task.current_task().log_context
+
+    return {}
+
+async def github_webhook_background(data, request):
     if request.headers["X-GitHub-Event"] == "ping":
         pass
 
     elif request.headers["X-GitHub-Event"] == "push":
-        if data["ref"] == "refs/heads/master":
+        if data["ref"] in ["refs/heads/master", "refs/heads/asciidoctor-mvn"]:
             trimmed_ref = data["ref"][11:]
             logger.info("Building branch {trimmed_ref} from repo {data[repository][full_name]}".format(**locals()))
             deploy_dir = "dev/{trimmed_ref}".format(**locals())
@@ -171,7 +176,7 @@ async def github_webhook(data, request):
             ):
                 await build.build_deploy(
                     source_url=data["repository"]["html_url"],
-                    source_ref=data["ref"],
+                    source_ref=trimmed_ref,
                     deploy_dir=deploy_dir,
                     deploy_url=_github_deploy_url(os.environ["GITHUB_PAGES_STUB"]),
                 )
@@ -191,7 +196,7 @@ async def github_webhook(data, request):
             logger.debug("Ignoring ref_type: {data[ref_type]}".format(**locals()))
 
     elif request.headers["X-GitHub-Event"] == "pull_request":
-        if data["action"] in ["opened", "synchronize"]:
+        if data["action"] in ["opened", "reopened", "synchronize"]:
             logger.info("PR #{data[number]} new/updated, building branch {data[pull_request][head][ref]} from repo {data[pull_request][head][repo][full_name]}".format(**locals()))
             deploy_dir = "PR/{data[number]}".format(**locals())
             async with GithubStatus(
@@ -216,8 +221,6 @@ async def github_webhook(data, request):
     else:
         raise Exception("Unknown event type")
 
-    return {}
-
 async def show_id(request):
     asyncio.Task.current_task().log_context = create_log_context_id()
     return aiohttp.web.Response(
@@ -229,7 +232,7 @@ async def show_id(request):
 # Setup
 #
 
-def start_server(bind, mount_root):
+def start_server(bind):
     logger.debug("Starting server")
 
     app = aiohttp.web.Application()
