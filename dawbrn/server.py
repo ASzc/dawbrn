@@ -148,6 +148,16 @@ class GithubCommentStatus(object):
             await self.add_comment("error", "Build error: {exc_type.__name__}".format(**locals()))
         await self.session.__aexit__(exc_type, exc_value, exc_traceback)
 
+def background_done_callback(future):
+    try:
+        future.result()
+    except exception.ClientError as e:
+        logger.error("({e.__class__.__name__}): {e.desc}".format(**locals()))
+    except Exception as e:
+        traceback_id, obj = exception_to_obj(e)
+        logger.error("Internal failure ({e.__class__.__name__}), traceback hash: {traceback_id}".format(**locals()))
+        log_traceback_multi_line()
+
 async def github_webhook(data, request):
     # Verify signature
     hasher = hmac.new(os.environ["GITHUB_HMAC_TOKEN"].encode("utf-8"), digestmod="sha1")
@@ -160,6 +170,7 @@ async def github_webhook(data, request):
 
     bgtask = request.app.loop.create_task(github_webhook_background(data, request))
     bgtask.log_context = asyncio.Task.current_task().log_context
+    bgtask.add_done_callback(background_done_callback)
 
     return {}
 
@@ -219,6 +230,8 @@ async def github_webhook_background(data, request):
             logger.debug("Ignoring action: {data[action]}".format(**locals()))
     else:
         raise Exception("Unknown event type")
+
+    logger.info("Event handled successfully".format(**locals()))
 
 async def show_id(request):
     asyncio.Task.current_task().log_context = create_log_context_id()
