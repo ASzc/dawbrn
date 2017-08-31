@@ -27,17 +27,20 @@ async def register(deploy_dir, deploy_url):
         # Register self as the active task for the deployment location
         _deploy_tasks[deploy_url][deploy_dir] = asyncio.Task.current_task()
 
-async def _subprocess(program, *args, msg=None, error_ok=False):
+async def _subprocess(program, *args, msg=None, error_ok=False, output=False):
     p = await asyncio.create_subprocess_exec(
         program,
         *args,
-        stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE if output else asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.STDOUT if output else asyncio.subprocess.DEVNULL,
     )
+    if output:
+        stdout_data, stderr_data = await p.communicate()
+        return stdout_data.decode("utf-8").strip()
     if await p.wait() != 0:
         if not error_ok:
             raise exception.SubprocessError(msg or "{program} failed, code {p.returncode}".format(**locals()))
-    return p
+    return p.returncode
 
 async def _try_deploy(deploy_url, coro, commit_msg="Deploy"):
     with tempfile.TemporaryDirectory() as deploy_clone:
@@ -63,14 +66,20 @@ async def _try_deploy(deploy_url, coro, commit_msg="Deploy"):
 
             await coro(deploy_clone)
             await _subprocess("git", "-C", deploy_clone, "add", "-A")
-            await _subprocess("git", "-C", deploy_clone, "commit", "-m", commit_msg)
+            p = await _subprocess(
+                "git", "-C", deploy_clone, "commit", "-m", commit_msg,
+                error_ok=True,
+            )
+            if p != 0:
+                logger.info("No changes to commit, skipping push")
+                return
 
             p = await _subprocess(
                 "git", "-C", deploy_clone, "push", "origin", "HEAD:gh-pages",
                 error_ok=True,
             )
             # There may have been an interleaved push, assume any failure is this scenario and retry
-            success = p.returncode == 0
+            success = p == 0
             retry = not success and retry_count < 5
             retry_count += 1
             if not success:
@@ -95,11 +104,21 @@ async def build_deploy(source_url, source_ref, deploy_dir, deploy_url):
             msg="Could not clone {source_ref} from {source_url}".format(**locals()),
         )
 
+        log_path = os.path.join(source_clone, "dawbrn.log")
         # https://www.projectatomic.io/blog/2015/08/why-we-dont-let-non-root-users-run-docker-in-centos-fedora-or-rhel/
-        await _subprocess(
-            "sudo", "/usr/bin/dawbrn_dockerbuild", source_clone,
-            msg="Build failed",
-        )
+        try:
+            await _subprocess(
+                "sudo", "/usr/bin/dawbrn_dockerbuild", source_clone,
+                msg="Build failed",
+            )
+        except exception.SubprocessError as e:
+            # Delegate reading to avoid blocking the aio thread
+            e.output = await _subprocess(
+                "cat",
+                log_path,
+                output=True,
+            )
+            raise
 
         async def copy(deploy_clone):
             output_dir = os.path.join(deploy_clone, deploy_dir)
@@ -109,10 +128,21 @@ async def build_deploy(source_url, source_ref, deploy_dir, deploy_url):
             await _subprocess(
                 "cp", "-r",
                 os.path.join(source_clone, "target", "."), # TODO configurable???
-                os.path.join(source_clone, "dawbrn.log"),
+                log_path,
                 output_dir
             )
         await _try_deploy(deploy_url, copy)
+
+        warnings = await _subprocess(
+            "grep",
+            "-i",
+            "-e", "WARNING",
+            log_path,
+            output=True,
+        )
+        if len(warnings) > 0:
+            return warnings
+        return None
 
 async def build_undeploy(deploy_dir, deploy_url):
     await register(deploy_dir, deploy_url)
