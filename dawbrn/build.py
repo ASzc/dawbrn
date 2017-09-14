@@ -1,5 +1,6 @@
 import asyncio
 import asyncio.subprocess
+import enum
 import logging
 import os
 import tempfile
@@ -8,6 +9,11 @@ import time
 from . import exception
 
 logger = logging.getLogger(__name__)
+
+class Result(enum.Enum):
+    SUCCESS = 1
+    WARNING = 2
+    FAILURE = 3
 
 _deploy_tasks = dict()
 
@@ -113,25 +119,28 @@ async def build_deploy(source_url, source_ref, deploy_dir, deploy_url):
             )
         except exception.SubprocessError as e:
             # Delegate reading to avoid blocking the aio thread
-            e.output = await _subprocess(
+            error_output = await _subprocess(
                 "cat",
                 log_path,
                 output=True,
             )
-            raise
+        else:
+            error_output = None
 
         async def copy(deploy_clone):
             output_dir = os.path.join(deploy_clone, deploy_dir)
             # Not using shutil to avoid blocking the aio thread
             await _subprocess("rm", "-rf", output_dir)
             os.makedirs(output_dir)
-            await _subprocess(
-                "cp", "-r",
-                os.path.join(source_clone, "target", "."), # TODO configurable???
-                log_path,
-                output_dir
-            )
+            await _subprocess("cp", log_path, output_dir)
+            target_dir = os.path.join(source_clone, "target", "."), # TODO configurable???
+            if os.path.exists(target_dir):
+                await _subprocess("cp", "-r", target_dir, output_dir)
+
         await _try_deploy(deploy_url, copy)
+
+        if error_output is not None:
+            return Result.FAILURE
 
         warnings = await _subprocess(
             "grep",
@@ -141,8 +150,9 @@ async def build_deploy(source_url, source_ref, deploy_dir, deploy_url):
             output=True,
         )
         if len(warnings) > 0:
-            return warnings
-        return None
+            return Result.WARNING
+
+        return Result.SUCCESS
 
 async def build_undeploy(deploy_dir, deploy_url):
     await register(deploy_dir, deploy_url)

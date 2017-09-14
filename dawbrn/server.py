@@ -107,7 +107,7 @@ class GithubCommentStatus(object):
         self.pr_num = pr_num
         self.sha = sha
         self.success_url = success_url
-        self.warnings = None
+        self.result = None
         self.github = "https://api.github.com"
         self.session = None
 
@@ -137,20 +137,18 @@ class GithubCommentStatus(object):
     async def __aexit__(self, exc_type, exc_value, exc_traceback):
         shortsha = self.sha[:8]
         if exc_type is None:
-            if self.warnings is None:
-                body = "[Build completed ok]({self.success_url}) (commit {shortsha})"
+            if self.result is build.Result.WARNING:
+                body = "[Build completed with warnings]({self.success_url}) (commit {shortsha}) [Full Log]({self.success_url}/dawbrn.log)"
+                state = "success"
+            elif self.result is build.Result.FAILURE:
+                body = "[Build failed]({self.success_url}) (commit {shortsha}) [Full Log]({self.success_url}/dawbrn.log)"
+                state = "success"
             else:
-                body = "[Build completed with warnings]({self.success_url}) (commit {shortsha})\n```\n{self.warnings}\n```\n[Full Log]({self.success_url}/dawbrn.log)"
-            await self.add_comment("success", body.format(**locals()))
-
-        elif exc_type == exception.SubprocessError:
-            if exc_value.output is None:
-                body = "Build failure (commit {shortsha}): {exc_value.desc}"
-            else:
-                body = "Build failure (commit {shortsha}):\n```\n{exc_value.output}\n```"
-            await self.add_comment("failure", body.format(**locals()))
+                body = "[Build completed ok]({self.success_url}) (commit {shortsha}) [Full Log]({self.success_url}/dawbrn.log)"
+                state = "failure"
+            await self.add_comment(state, body.format(**locals()))
         else:
-            await self.add_comment("error", "Build error (commit {shortsha}): {exc_type.__name__}".format(**locals()))
+            await self.add_comment("error", "Internal error (commit {shortsha}): {exc_type.__name__}".format(**locals()))
         await self.session.__aexit__(exc_type, exc_value, exc_traceback)
 
 def background_done_callback(future):
@@ -221,7 +219,7 @@ async def github_webhook_background(data, request):
                 sha=data["pull_request"]["head"]["sha"],
                 success_url=_github_pages_url(os.environ["GITHUB_PAGES_PR_STUB"], deploy_dir),
             ) as status:
-                status.warnings = await build.build_deploy(
+                status.result = await build.build_deploy(
                     source_url=data["pull_request"]["head"]["repo"]["html_url"],
                     source_ref=data["pull_request"]["head"]["ref"],
                     deploy_dir=deploy_dir,
