@@ -133,7 +133,7 @@ async def build_deploy(source_url, source_ref, deploy_dir, deploy_url):
             await _subprocess("rm", "-rf", output_dir)
             os.makedirs(output_dir)
             await _subprocess("cp", log_path, output_dir)
-            target_dir = os.path.join(source_clone, "target", "."), # TODO configurable???
+            target_dir = os.path.join(source_clone, "target", ".") # TODO configurable???
             if os.path.exists(target_dir):
                 await _subprocess("cp", "-r", target_dir, output_dir)
 
