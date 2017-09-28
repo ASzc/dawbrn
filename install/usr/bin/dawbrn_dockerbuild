@@ -18,7 +18,7 @@ trap "chown -R dawbrn: '$source_clone'" EXIT
 # Prepare a build log (that's never writable by the container user, since it's created after the chown)
 > "$source_clone/dawbrn.log"
 
-find "/etc/dawbrn/dockerbuild.d/" -executable -type f -print0 | \
+find "/etc/dawbrn/dockerbuild.d/" -executable -type f -print0 | sort | \
 while read -r -d $'\0' sub
 do
     "$sub" "$source_clone" >> "$source_clone/dawbrn.log" 2>&1
