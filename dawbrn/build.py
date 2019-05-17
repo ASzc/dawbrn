@@ -127,6 +127,21 @@ async def build_deploy(source_url, source_ref, deploy_dir, deploy_url):
         else:
             error_output = None
 
+        async def generate_index(d):
+            contents = sorted(os.listdir(d))
+            # If directory has index already, do not overwrite
+            if "index.html" not in contents:
+                with open(os.path.join(d, "index.html"), "w") as i:
+                    print("<html><body><ul>", file=i)
+                    for c in contents:
+                        print("<li><a href='{c}'>{c}</a></li>".format(**locals()), file=i)
+                    print("</ul></body></html>", file=i)
+            # Recurse
+            for c in contents:
+                cpath = os.path.join(d, c)
+                if os.path.isdir(cpath):
+                    await generate_index(cpath)
+
         async def copy(deploy_clone):
             output_dir = os.path.join(deploy_clone, deploy_dir)
             # Not using shutil to avoid blocking the aio thread
@@ -136,6 +151,7 @@ async def build_deploy(source_url, source_ref, deploy_dir, deploy_url):
             target_dir = os.path.join(source_clone, "target", ".") # TODO configurable???
             if os.path.exists(target_dir):
                 await _subprocess("cp", "-r", target_dir, output_dir)
+            await generate_index(output_dir)
 
         await _try_deploy(deploy_url, copy)
 
