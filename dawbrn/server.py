@@ -138,14 +138,12 @@ class GithubCommentStatus(object):
         shortsha = self.sha[:8]
         if exc_type is None:
             if self.result is build.Result.WARNING:
-                body = "[Build completed with warnings]({self.success_url}) (commit {shortsha}) [Full Log]({self.success_url}/dawbrn.log)"
-                state = "success"
+                state = "warning"
             elif self.result is build.Result.FAILURE:
-                body = "[Build failed]({self.success_url}) (commit {shortsha}) [Full Log]({self.success_url}/dawbrn.log)"
-                state = "success"
-            else:
-                body = "[Build completed ok]({self.success_url}) (commit {shortsha}) [Full Log]({self.success_url}/dawbrn.log)"
                 state = "failure"
+            else:
+                state = "success"
+            body = "Build status: {state} ([Full Log]({self.success_url}/dawbrn.log))\n[Keycloak Documentation]({self.success_url})\n[RH-SSO Documentation]({self.success_url}/rh-sso)"
             await self.add_comment(state, body.format(**locals()))
         else:
             await self.add_comment("error", "Internal error (commit {shortsha}): {exc_type.__name__}".format(**locals()))
